@@ -191,6 +191,132 @@ class FNO2d(nn.Module):
         return torch.cat((gridx, gridy), dim=-1).to(device)
 
 
+    
+    
+##################################################################
+# 
+###################################################################
+
+
+def numpy_catheter_mesh_2d(x2, x3, h, ncy, ncx1, ncx2, ncx3, ncx4, plot_or_not = False):
+    assert(abs(h) > 1e-8)
+    x1 = 40.0
+    bottom_x, bottom_y = np.array([0-100, x1-100, x2-100, x3-100, 0, 40.0, x2, x3, 100.0]),  np.array([0, 0.0, h, 0, 0.0, 0, h, 0, 0.0])
+
+    # ncy = 20
+    
+    Ly = 20
+    yy = np.linspace(0, Ly, ncy+1)
+
+    Lx = 100
+    # ncx1, ncx2, ncx3, ncx4 = 20, 10, 10, 20
+    ncx = ncx1 + ncx2 + ncx3 + ncx4
+    xx = np.hstack((np.linspace(0, x1, ncx1,endpoint=False), np.linspace(x1, (x1+x3)/2, ncx2,endpoint=False), 
+                     np.linspace((x1+x3)/2, x3, ncx3,endpoint=False), np.linspace(x3, Lx, ncx4+1)))
+
+    # Step 1
+
+    X, Y = np.meshgrid(xx, yy)
+
+    for i in range(ncx1, ncx1+ncx2+1):
+        x = X[0, i]
+        Y[:, i] = Y[:, 0]*(Ly - 2*(x - x1)/((x1+x3)/2 - x1)*h)/Ly + (x - x1)/((x1+x3)/2 - x1)*h
+
+    for i in range(ncx1+ncx2, ncx1+ncx2+ncx3+1):
+        x = X[0, i]
+        Y[:, i] = Y[:, 0]*(Ly - 2*(x3 - x)/(x3 - (x1+x3)/2)*h)/Ly + (x3 - x)/(x3 - (x1+x3)/2)*h
+    
+    if plot_or_not:
+        plt.figure()
+        plt.pcolor(X, Y, np.zeros(X.shape), facecolor="none", edgecolors="r")
+
+
+
+    # Step 2
+
+    dx1 = np.zeros((ncy+1, ncx+1))
+    dx2 = np.zeros((ncy+1, ncx+1))
+    dx = np.zeros((ncy+1, ncx+1))
+    dy = np.ones((ncy+1, ncx+1)) *h 
+    dx1[:, 0:ncx1+ncx2+1] = (x1+x3)/2 
+    dx2[:, 0:ncx1+ncx2+1] = x1
+    dx1[:, ncx1+ncx2:] = Lx-(x1+x3)/2
+    dx2[:, ncx1+ncx2:] = Lx-x3
+
+    dx[:, 0:ncx1+ncx2+1] = X[:, 0:ncx1+ncx2+1]
+    dx[:, ncx1+ncx2:] = Lx - X[:, ncx1+ncx2:]
+
+    dy[Y <= h] = Y[Y <= h]
+    dy[Y >= Ly - h] = (Ly - Y[Y >= Ly - h])
+
+    Delta_x_max = x2 - (x1 + x3)/2
+
+    Delta_x = dx/(dx1*dy + (h - dy)*dx2) * dy * Delta_x_max
+    X = X + Delta_x
+    
+    if plot_or_not:
+        plt.figure()
+        plt.pcolor(X, Y, np.zeros(X.shape), facecolor="none", edgecolors="r")
+
+        plt.figure()
+        plt.scatter(X.flatten(), Y.flatten(), s=0.1)
+        plt.plot(bottom_x, bottom_y, color="r")
+        
+    return X, Y
+
+
+
+
+def numpy_catheter_mesh_1d(x2, x3, h, ncx1, ncx2, ncx3, ncx4, plot_or_not = False):
+    assert(abs(h) > 1e-8)
+    x1 = 40.0
+    bottom_x, bottom_y = np.array([0-100, x1-100, x2-100, x3-100, 0, 40.0, x2, x3, 100.0]),  np.array([0, 0.0, h, 0, 0.0, 0, h, 0, 0.0])
+
+    Lx = 100
+    # ncx1, ncx2, ncx3, ncx4 = 20, 10, 10, 20
+    ncx = ncx1 + ncx2 + ncx3 + ncx4
+    xx = np.hstack((np.linspace(0, x1, ncx1,endpoint=False), np.linspace(x1, (x1+x3)/2, ncx2,endpoint=False), 
+                     np.linspace((x1+x3)/2, x3, ncx3,endpoint=False), np.linspace(x3, Lx, ncx4+1)))
+    
+    yy = np.zeros(ncx+1)
+    yy[ncx1:ncx1+ncx2] = (xx[ncx1:ncx1+ncx2] - x1)/((x1+x3)/2 - x1)*h
+    yy[ncx1+ncx2:ncx1+ncx2+ncx3+1] = (x3 - xx[ncx1+ncx2:ncx1+ncx2+ncx3+1])/(x3 - (x1+x3)/2)*h
+    # Step 1
+
+
+    if plot_or_not:
+        plt.figure()
+        plt.plot(xx, yy, "-or", fillstyle="none")
+
+    # Step 2
+
+    dx1 = np.zeros(ncx+1)
+    dx2 = np.zeros(ncx+1)
+    dx  = np.zeros(ncx+1)
+    
+    dx1[0:ncx1+ncx2+1] = (x1+x3)/2 
+    dx2[0:ncx1+ncx2+1] = x1
+    dx1[ncx1+ncx2:]    = Lx-(x1+x3)/2
+    dx2[ncx1+ncx2:]    = Lx-x3
+
+    dx[ncx1+1:ncx1+ncx2] = xx[ncx1+1:ncx1+ncx2]
+    dx[ncx1+ncx2:ncx1+ncx2+ncx3+1] = Lx - xx[ncx1+ncx2:ncx1+ncx2+ncx3+1]
+
+    Delta_x_max = x2 - (x1 + x3)/2
+
+    Delta_x = dx/(dx1*yy + (h - yy)*dx2) * yy * Delta_x_max
+    xx = xx + Delta_x
+    print(dx)
+    if plot_or_not:
+        plt.figure()
+        plt.plot(xx, yy, "-or", fillstyle="none")
+
+        plt.plot(bottom_x, bottom_y, "-b")
+        
+    return xx, yy
+
+
+
 # ################################################################
 # # configs
 # ################################################################
