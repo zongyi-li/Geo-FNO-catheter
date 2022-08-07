@@ -78,7 +78,7 @@ class SpectralConv1d(nn.Module):
         # (batch, in_channel, x ), (in_channel, out_channel, x) -> (batch, out_channel, x)
         return torch.einsum("bix,iox->box", input, weights)
 
-    def forward(self, x, output_size):
+    def forward(self, x, output_size=None):
         batchsize = x.shape[0]
         #Compute Fourier coeffcients up to factor of e^(- something constant)
         x_ft = torch.fft.rfft(x)
@@ -88,7 +88,11 @@ class SpectralConv1d(nn.Module):
         out_ft[:, :, :self.modes1] = self.compl_mul1d(x_ft[:, :, :self.modes1], self.weights1)
 
         #Return to physical space
-        x = torch.fft.irfft(out_ft, n=output_size)
+        if output_size == None:
+            x = torch.fft.irfft(out_ft, n=x.shape[-1])
+        else:
+            x = torch.fft.irfft(out_ft, n=output_size)
+            
         return x
 
 class FNO2d(nn.Module):
@@ -192,7 +196,94 @@ class FNO2d(nn.Module):
 
 
     
+class FNO1d(nn.Module):
+    def __init__(self, modes, width):
+        super(FNO1d, self).__init__()
+
+        """
+        The overall network. It contains 4 layers of the Fourier layer.
+        1. Lift the input to the desire channel dimension by self.fc0 .
+        2. 4 layers of the integral operators u' = (W + K)(u).
+            W defined by self.w; K defined by self.conv .
+        3. Project from the channel space to the output space by self.fc1 and self.fc2 .
+        
+        input: the solution of the initial condition and location (a(x), x)
+        input shape: (batchsize, x=s, c=2)
+        output: the solution of a later timestep
+        output shape: (batchsize, x=s, c=1)
+        """
+
+        self.modes1 = modes
+        self.width = width
+        self.padding = 100 # pad the domain if input is non-periodic
+        self.fc0 = nn.Linear(2, self.width) # input channel is 2: (a(x), x)
+        
+        self.conv0 = SpectralConv1d(self.width, self.width, self.modes1)
+        self.conv1 = SpectralConv1d(self.width, self.width, self.modes1)
+        self.conv2 = SpectralConv1d(self.width, self.width, self.modes1)
+        self.conv3 = SpectralConv1d(self.width, self.width, self.modes1)
+        self.conv4 = SpectralConv1d(self.width, self.width, self.modes1)
+
+        
+        self.w0 = nn.Conv1d(self.width, self.width, 1)
+        self.w1 = nn.Conv1d(self.width, self.width, 1)
+        self.w2 = nn.Conv1d(self.width, self.width, 1)
+        self.w3 = nn.Conv1d(self.width, self.width, 1)
+        
+
+        self.fc1 = nn.Linear(self.width, 128)
+        self.fc2 = nn.Linear(128, 1)
+      
+
+    def forward(self, x):
+        
+        x = self.fc0(x)
+        x = x.permute(0, 2, 1)
+        x = F.pad(x, [0,self.padding]) # pad the domain if input is non-periodic
+
+        x1 = self.conv0(x)
+        x2 = self.w0(x)
+        x = x1 + x2
+        x = F.gelu(x)
+
+        x1 = self.conv1(x)
+        x2 = self.w1(x)
+        x = x1 + x2
+        x = F.gelu(x)
+
+        x1 = self.conv2(x)
+        x2 = self.w2(x)
+        x = x1 + x2
+        x = F.gelu(x)
+        
+        x1 = self.conv3(x)
+        x2 = self.w3(x)
+        x = x1 + x2
+        x = F.gelu(x)
+        
+        x = x[..., :-self.padding]
+        # x(batch, channel, y)
+        x1 = self.conv4(x, 4001)
+        x2 = F.interpolate(x, 4001, mode='linear', align_corners=True)
+        x = x1 + x2
+        # x(batch, channel, 2001)
+        x = x.permute(0, 2, 1)
+        x = self.fc1(x)
+        x = F.gelu(x)
+        x = self.fc2(x)
+
+        # x = x[..., :-self.padding] # pad the domain if input is non-periodic
+#         x = x.permute(0, 2, 1)
+#         x = self.fc1(x)
+        return x
+
+    def get_grid(self, shape, device):
+        batchsize, size_x = shape[0], shape[1]
+        gridx = torch.tensor(np.linspace(0, 1, size_x), dtype=torch.float)
+        gridx = gridx.reshape(1, size_x, 1).repeat([batchsize, 1, 1])
+        return gridx.to(device)
     
+      
 ##################################################################
 # 
 ###################################################################
@@ -306,7 +397,7 @@ def numpy_catheter_mesh_1d(x2, x3, h, ncx1, ncx2, ncx3, ncx4, plot_or_not = Fals
 
     Delta_x = dx/(dx1*yy + (h - yy)*dx2) * yy * Delta_x_max
     xx = xx + Delta_x
-    print(dx)
+ 
     if plot_or_not:
         plt.figure()
         plt.plot(xx, yy, "-or", fillstyle="none")

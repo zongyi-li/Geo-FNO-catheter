@@ -11,6 +11,6 @@
 #SBATCH --output=FNO-Catheter.out  
 
 
-python -u train.py   > fno-train.out 
+python -u train_2d.py   > fno-train.out 
 
 

@@ -26,8 +26,8 @@ INPUT_X = PATH+"x_2d_structured_mesh.npy"
 INPUT_Y = PATH+"y_2d_structured_mesh.npy"
 OUTPUT = PATH+"density_1d_data.npy"
 
-ntrain = 800
-ntest = 200
+ntrain = 400
+ntest = 100
 
 batch_size = 20
 learning_rate = 0.001
@@ -40,10 +40,10 @@ modes = 12
 width = 32
 
 r1 = 1
-r2 = 2
+r2 = 1
 # nx ny
 s1 = int(((101 - 1) / r1) + 1)
-s2 = int(((401 - 1) / r2) + 1)
+s2 = int(((201 - 1) / r2) + 1)
 s3 = 2001
 
 ################################################################
@@ -60,7 +60,7 @@ output = np.load(OUTPUT)
 output = torch.tensor(output, dtype=torch.float).permute(1,0)
 print(input.shape, output.shape)
 
-index = torch.randperm(1000)
+index = torch.randperm(500)
 train_index = index[:ntrain]
 test_index = index[-ntest:]
 
@@ -99,7 +99,7 @@ for ep in range(epochs):
 
         optimizer.zero_grad()
         out = model(x)
-
+        
         loss = myloss(out.view(batch_size, -1), y.view(batch_size, -1))
         loss.backward()
 
