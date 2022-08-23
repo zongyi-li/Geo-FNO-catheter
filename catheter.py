@@ -1,6 +1,7 @@
 """
 r: Zongyi Li and Daniel Zhengyu Huang
 """
+from scipy import stats
 import torch
 import numpy
 import torch.nn.functional as F
@@ -197,7 +198,7 @@ class FNO2d(nn.Module):
 
     
 class FNO1d(nn.Module):
-    def __init__(self, modes, width):
+    def __init__(self, modes, width, padding=100, input_channel=2, output_np=2001):
         super(FNO1d, self).__init__()
 
         """
@@ -212,11 +213,11 @@ class FNO1d(nn.Module):
         output: the solution of a later timestep
         output shape: (batchsize, x=s, c=1)
         """
-
+        self.output_np=output_np
         self.modes1 = modes
         self.width = width
-        self.padding = 100 # pad the domain if input is non-periodic
-        self.fc0 = nn.Linear(2, self.width) # input channel is 2: (a(x), x)
+        self.padding = padding # pad the domain if input is non-periodic
+        self.fc0 = nn.Linear(input_channel, self.width) # input channel is 2: (a(x), x)
         
         self.conv0 = SpectralConv1d(self.width, self.width, self.modes1)
         self.conv1 = SpectralConv1d(self.width, self.width, self.modes1)
@@ -263,8 +264,8 @@ class FNO1d(nn.Module):
         
         x = x[..., :-self.padding]
         # x(batch, channel, y)
-        x1 = self.conv4(x, 4001)
-        x2 = F.interpolate(x, 4001, mode='linear', align_corners=True)
+        x1 = self.conv4(x, self.output_np)
+        x2 = F.interpolate(x, self.output_np, mode='linear', align_corners=True)
         x = x1 + x2
         # x(batch, channel, 2001)
         x = x.permute(0, 2, 1)
@@ -288,125 +289,156 @@ class FNO1d(nn.Module):
 # 
 ###################################################################
 
-
-def numpy_catheter_mesh_2d(x2, x3, h, ncy, ncx1, ncx2, ncx3, ncx4, plot_or_not = False):
-    assert(abs(h) > 1e-8)
-    x1 = 40.0
-    bottom_x, bottom_y = np.array([0-100, x1-100, x2-100, x3-100, 0, 40.0, x2, x3, 100.0]),  np.array([0, 0.0, h, 0, 0.0, 0, h, 0, 0.0])
-
-    # ncy = 20
+# return the mesh for [-L_p, 0]
+# x1, x2 and x3 are positions
+def numpy_catheter_mesh_1d_single_period(L_p, x1, x2, x3, h, ncx1, ncx2, ncx3, ncx4):
+    # between [-L_p, 0]
     
-    Ly = 20
-    yy = np.linspace(0, Ly, ncy+1)
-
-    Lx = 100
     # ncx1, ncx2, ncx3, ncx4 = 20, 10, 10, 20
     ncx = ncx1 + ncx2 + ncx3 + ncx4
-    xx = np.hstack((np.linspace(0, x1, ncx1,endpoint=False), np.linspace(x1, (x1+x3)/2, ncx2,endpoint=False), 
-                     np.linspace((x1+x3)/2, x3, ncx3,endpoint=False), np.linspace(x3, Lx, ncx4+1)))
-
-    # Step 1
-
-    X, Y = np.meshgrid(xx, yy)
-
-    for i in range(ncx1, ncx1+ncx2+1):
-        x = X[0, i]
-        Y[:, i] = Y[:, 0]*(Ly - 2*(x - x1)/((x1+x3)/2 - x1)*h)/Ly + (x - x1)/((x1+x3)/2 - x1)*h
-
-    for i in range(ncx1+ncx2, ncx1+ncx2+ncx3+1):
-        x = X[0, i]
-        Y[:, i] = Y[:, 0]*(Ly - 2*(x3 - x)/(x3 - (x1+x3)/2)*h)/Ly + (x3 - x)/(x3 - (x1+x3)/2)*h
-    
-    if plot_or_not:
-        plt.figure()
-        plt.pcolor(X, Y, np.zeros(X.shape), facecolor="none", edgecolors="r")
-
-
-
-    # Step 2
-
-    dx1 = np.zeros((ncy+1, ncx+1))
-    dx2 = np.zeros((ncy+1, ncx+1))
-    dx = np.zeros((ncy+1, ncx+1))
-    dy = np.ones((ncy+1, ncx+1)) *h 
-    dx1[:, 0:ncx1+ncx2+1] = (x1+x3)/2 
-    dx2[:, 0:ncx1+ncx2+1] = x1
-    dx1[:, ncx1+ncx2:] = Lx-(x1+x3)/2
-    dx2[:, ncx1+ncx2:] = Lx-x3
-
-    dx[:, 0:ncx1+ncx2+1] = X[:, 0:ncx1+ncx2+1]
-    dx[:, ncx1+ncx2:] = Lx - X[:, ncx1+ncx2:]
-
-    dy[Y <= h] = Y[Y <= h]
-    dy[Y >= Ly - h] = (Ly - Y[Y >= Ly - h])
-
-    Delta_x_max = x2 - (x1 + x3)/2
-
-    Delta_x = dx/(dx1*dy + (h - dy)*dx2) * dy * Delta_x_max
-    X = X + Delta_x
-    
-    if plot_or_not:
-        plt.figure()
-        plt.pcolor(X, Y, np.zeros(X.shape), facecolor="none", edgecolors="r")
-
-        plt.figure()
-        plt.scatter(X.flatten(), Y.flatten(), s=0.1)
-        plt.plot(bottom_x, bottom_y, color="r")
-        
-    return X, Y
-
-
-
-
-def numpy_catheter_mesh_1d(x2, x3, h, ncx1, ncx2, ncx3, ncx4, plot_or_not = False):
-    assert(abs(h) > 1e-8)
-    x1 = 40.0
-    bottom_x, bottom_y = np.array([0-100, x1-100, x2-100, x3-100, 0, 40.0, x2, x3, 100.0]),  np.array([0, 0.0, h, 0, 0.0, 0, h, 0, 0.0])
-
-    Lx = 100
-    # ncx1, ncx2, ncx3, ncx4 = 20, 10, 10, 20
-    ncx = ncx1 + ncx2 + ncx3 + ncx4
-    xx = np.hstack((np.linspace(0, x1, ncx1,endpoint=False), np.linspace(x1, (x1+x3)/2, ncx2,endpoint=False), 
-                     np.linspace((x1+x3)/2, x3, ncx3,endpoint=False), np.linspace(x3, Lx, ncx4+1)))
+    xx = np.hstack((np.linspace(-L_p, x1, ncx1,endpoint=False), np.linspace(x1, x2, ncx2,endpoint=False), 
+                     np.linspace(x2, x3, ncx3,endpoint=False), np.linspace(x3, 0, ncx4+1)))
     
     yy = np.zeros(ncx+1)
-    yy[ncx1:ncx1+ncx2] = (xx[ncx1:ncx1+ncx2] - x1)/((x1+x3)/2 - x1)*h
-    yy[ncx1+ncx2:ncx1+ncx2+ncx3+1] = (x3 - xx[ncx1+ncx2:ncx1+ncx2+ncx3+1])/(x3 - (x1+x3)/2)*h
-    # Step 1
-
-
-    if plot_or_not:
-        plt.figure()
-        plt.plot(xx, yy, "-or", fillstyle="none")
-
-    # Step 2
-
-    dx1 = np.zeros(ncx+1)
-    dx2 = np.zeros(ncx+1)
-    dx  = np.zeros(ncx+1)
-    
-    dx1[0:ncx1+ncx2+1] = (x1+x3)/2 
-    dx2[0:ncx1+ncx2+1] = x1
-    dx1[ncx1+ncx2:]    = Lx-(x1+x3)/2
-    dx2[ncx1+ncx2:]    = Lx-x3
-
-    dx[ncx1+1:ncx1+ncx2] = xx[ncx1+1:ncx1+ncx2]
-    dx[ncx1+ncx2:ncx1+ncx2+ncx3+1] = Lx - xx[ncx1+ncx2:ncx1+ncx2+ncx3+1]
-
-    Delta_x_max = x2 - (x1 + x3)/2
-
-    Delta_x = dx/(dx1*yy + (h - yy)*dx2) * yy * Delta_x_max
-    xx = xx + Delta_x
- 
-    if plot_or_not:
-        plt.figure()
-        plt.plot(xx, yy, "-or", fillstyle="none")
-
-        plt.plot(bottom_x, bottom_y, "-b")
-        
+    yy[ncx1:ncx1+ncx2] = (xx[ncx1:ncx1+ncx2] - x1)/(x2 - x1)*h
+    yy[ncx1+ncx2:ncx1+ncx2+ncx3+1] = (x3 - xx[ncx1+ncx2:ncx1+ncx2+ncx3+1])/(x3 - x2)*h
     return xx, yy
 
 
+def numpy_d2xy(d, L_p, x1, x2, x3, h):
+    
+    p0, p1, p2, p3 = np.array([0.0,0.0]), np.array([x3,0.0]), np.array([x2, h]), np.array([x1,0.0])
+    v0, v1, v2, v3 = np.array([x3-0,0.0]), np.array([x2-x3,h]), np.array([x1-x2,-h]), np.array([-L_p-x1,0.0])
+    l0, l1, l2, l3 = -x3, np.sqrt((x2-x3)**2 + h**2), np.sqrt((x1-x2)**2 + h**2), L_p+x1
+    if d < l0:
+        x, y = d*v0/l0 + p0
+    elif d < l0 + l1:
+        x, y = (d-l0)*v1/l1 + p1 
+    elif d < l0 + l1 + l2:
+        x, y = (d-l0-l1)*v2/l2 + p2
+    else:
+        x, y = (d-l0-l1-l2)*v3/l3 + p3
+
+    return x, y
+
+def numpy_Lx2length(L_x, L_p, x1, x2, x3, h):
+    assert(L_x < L_p)
+    p0, p1, p2, p3 = np.array([0.0,0.0]), np.array([x3,0.0]), np.array([x2, h]), np.array([x1,0.0])
+    v0, v1, v2, v3 = np.array([x3-0,0.0]), np.array([x2-x3,h]), np.array([x1-x2,-h]), np.array([-L_p-x1,0.0])
+    l0, l1, l2, l3 = -x3, np.sqrt((x2-x3)**2 + h**2), np.sqrt((x1-x2)**2 + h**2), L_p+x1
+    assert(L_x <= l0+l1+l2+l3)
+    if L_x < -x3:
+        l = L_x
+    elif L_x < -x2:
+        l = l0 + l1*(L_x + x3)/(x3-x2)
+    elif L_x < -x1:
+        l = l0 + l1 + l2*(L_x + x2)/(x2-x1)
+    else:
+        l = l0 + l1 + l2 + L_x+x1
+
+    return l
+
+# return the mesh points in [-L_x, 0], each period length is L_p
+# x1, x2 and x3 are positions in the first period in the right
+def numpy_catheter_mesh_1d_total_length(L_x, L_p, x1, x2, x3, h, N_s):
+    # between [-L_p, 0]
+    
+    n_periods = np.floor(L_x / L_p)
+    L_x_last_period = L_x - n_periods*L_p
+    L_p_s = ((x1 + L_p) + (0 - x3) + np.sqrt((x2 - x1)**2 + h**2) + np.sqrt((x3 - x2)**2 + h**2))
+    L_s = L_p_s*n_periods + numpy_Lx2length(L_x_last_period, L_p, x1, x2, x3, h)
+    
+    # from 0
+    d_arr = np.linspace(0, L_s, N_s)
+    period_arr = np.floor(d_arr / L_p_s)
+    d_arr -= period_arr * L_p_s
+    
+    xx = np.zeros(N_s) 
+    yy = np.zeros(N_s)
+    for i in range(N_s):
+        xx[i], yy[i] = numpy_d2xy(d_arr[i], L_p, x1, x2, x3, h)
+        xx[i] -= period_arr[i]*L_p
+    return xx, yy
+
+
+
+def preprocess_period(ind, t,  data_info, file_name, ncx1=50, ncx2=50, ncx3=50, ncx4 = 50, n_periods = 5, bw_method = 1e-1):
+    
+    
+    ncx = ncx1 + ncx2 + ncx3 + ncx4
+    # user chooses t and x2 x3 h
+    # check t is consistent with data
+    sample  = np.int64(  file_name[file_name.find("sample") + len("sample"):  file_name.find("_U")]  )
+    uf  = np.float64(  file_name[file_name.find("uf") + len("uf"):  file_name.find("alpha")]  )
+    L_p, x2, x3, h, press = data_info[sample - 1, :]
+
+    assert((h > 20 and h < 30) and (15 < x3 and x3 < L_p/4) and (-L_p/4 < x2 and x2 < L_p/4))
+    # generate mesh
+    x1 = -0.5*L_p
+    x2 = x1 + x2
+    x3 = x1 + x3
+    X, Y = numpy_catheter_mesh_1d_single_period(L_p, x1, x2, x3, h, ncx1, ncx2, ncx3, ncx4)
+    x_mesh, y_mesh = np.zeros(n_periods*ncx+1), np.zeros(n_periods*ncx+1)
+    x_mesh[-(ncx + 1):], y_mesh[-(ncx + 1):] = X, Y    
+    for i_period in range(1,n_periods):
+        x_mesh[-((i_period + 1)*ncx + 1):-(i_period*ncx)], y_mesh[-((i_period + 1)*ncx + 1):-(i_period*ncx)] = X - L_p*i_period, Y
+    
+    # preprocee density
+    hf = h5py.File(file_name, "r")
+    x_b = hf["config"][str(t+1)]["x"][:]
+    y_b = hf["config"][str(t+1)]["y"][:]
+    
+    if(min(x_b) < -L_p*n_periods):
+        print("warning: bacteria out of the domain. ind = ", ind, ", file_name = ", file_name, " loc = ", min(x_b), " end point = ", -L_p*n_periods)
+    
+    nc = ncx
+    N_s = n_periods*nc + 1
+    xx = np.linspace(-L_p*n_periods, 0.0, N_s)
+    
+    bacteria_1d_data = x_b[np.logical_and(x_b <= 0 , x_b >= -L_p*n_periods)]
+    n_particle = len(bacteria_1d_data)
+    kernel = stats.gaussian_kde(bacteria_1d_data, bw_method = bw_method)
+    density_1d_data = kernel(xx)*n_particle
+
+    
+    return x_mesh, y_mesh, x_b, y_b, xx, density_1d_data, np.array([sample, uf, L_p, x1, x2, x3, h])
+
+
+
+
+
+
+def preprocess_length(ind, t,  data_info, file_name, N_s = 50, L_x = 5, bw_method = 1e-1):
+
+    sample  = np.int64(  file_name[file_name.find("sample") + len("sample"):  file_name.find("_U")]  )
+    uf  = np.float64(  file_name[file_name.find("uf") + len("uf"):  file_name.find("alpha")]  )
+    L_p, x2, x3, h, press = data_info[sample - 1, :]
+
+    assert((h > 20 and h < 30) and (15 < x3 and x3 < L_p/4) and (-L_p/4 < x2 and x2 < L_p/4))
+    # generate mesh
+    x1 = -0.5*L_p
+    x2 = x1 + x2
+    x3 = x1 + x3
+    x_mesh, y_mesh = numpy_catheter_mesh_1d_total_length(L_x, L_p, x1, x2, x3, h, N_s)
+
+    # preprocee density
+    hf = h5py.File(file_name, "r")
+    x_b = hf["config"][str(t+1)]["x"][:]
+    y_b = hf["config"][str(t+1)]["y"][:]
+    
+    if(min(x_b) < -L_x):
+        print("warning: bacteria out of the domain. ind = ", ind, ", file_name = ", file_name, " loc = ", min(x_b), " end point = ", -L_x)
+    
+
+    xx = np.linspace(-L_x, 0.0, N_s)
+    
+    bacteria_1d_data = x_b[np.logical_and(x_b <= 0 , x_b >= -L_x)]
+    n_particle = len(bacteria_1d_data)
+    kernel = stats.gaussian_kde(bacteria_1d_data, bw_method = bw_method)
+    density_1d_data = kernel(xx)*n_particle
+
+    
+    return x_mesh, y_mesh, x_b, y_b, xx, density_1d_data, np.array([sample, uf, L_p, x1, x2, x3, h])
 
 # ################################################################
 # # configs
