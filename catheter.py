@@ -300,8 +300,8 @@ def numpy_catheter_mesh_1d_single_period(L_p, x1, x2, x3, h, ncx1, ncx2, ncx3, n
                      np.linspace(x2, x3, ncx3,endpoint=False), np.linspace(x3, 0, ncx4+1)))
     
     yy = np.zeros(ncx+1)
-    yy[ncx1:ncx1+ncx2] = (xx[ncx1:ncx1+ncx2] - x1)/(x2 - x1)*h
-    yy[ncx1+ncx2:ncx1+ncx2+ncx3+1] = (x3 - xx[ncx1+ncx2:ncx1+ncx2+ncx3+1])/(x3 - x2)*h
+    yy[ncx1:ncx1+ncx2] = np.linspace(0, h, ncx2,endpoint=False)
+    yy[ncx1+ncx2:ncx1+ncx2+ncx3] = np.linspace(h, 0, ncx3,endpoint=False)
     return xx, yy
 
 
