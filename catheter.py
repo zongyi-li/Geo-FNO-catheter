@@ -372,7 +372,7 @@ def preprocess_period(ind, t,  data_info, file_name, ncx1=50, ncx2=50, ncx3=50, 
     uf  = np.float64(  file_name[file_name.find("uf") + len("uf"):  file_name.find("alpha")]  )
     L_p, x2, x3, h, press = data_info[sample - 1, :]
 
-    assert((h > 20 and h < 30) and (15 < x3 and x3 < L_p/4) and (-L_p/4 < x2 and x2 < L_p/4))
+    # assert((h > 20 and h < 30) and (15 < x3 and x3 < L_p/4) and (-L_p/4 < x2 and x2 < L_p/4))
     # generate mesh
     x1 = -0.5*L_p
     x2 = x1 + x2
@@ -405,6 +405,72 @@ def preprocess_period(ind, t,  data_info, file_name, ncx1=50, ncx2=50, ncx3=50, 
 
 
 
+def Lx2length(L_x, L_p, x1, x2, x3, h):
+    l0, l1, l2, l3 = -x3, torch.sqrt((x2-x3)**2 + h**2), torch.sqrt((x1-x2)**2 + h**2), L_p+x1
+    if L_x < -x3:
+        l = L_x
+    elif L_x < -x2:
+        l = l0 + l1*(L_x + x3)/(x3-x2)
+    elif L_x < -x1:
+        l = l0 + l1 + l2*(L_x + x2)/(x2-x1)
+    else:
+        l = l0 + l1 + l2 + L_x+x1
+
+    return l
+
+def d2xy(d, L_p, x1, x2, x3, h):
+    
+    p0, p1, p2, p3 = torch.tensor([0.0,0.0]), torch.tensor([x3,0.0]), torch.tensor([x2, h]), torch.tensor([x1,0.0])
+    v0, v1, v2, v3 = torch.tensor([x3-0,0.0]), torch.tensor([x2-x3,h]), torch.tensor([x1-x2,-h]), torch.tensor([-L_p-x1,0.0])
+    l0, l1, l2, l3 = -x3, torch.sqrt((x2-x3)**2 + h**2), torch.sqrt((x1-x2)**2 + h**2), L_p+x1
+    
+    xx, yy = torch.zeros(d.shape), torch.zeros(d.shape)
+    ind = (d < l0)
+    xx[ind] = d[ind]*v0[0]/l0 + p0[0]
+    yy[ind] = d[ind]*v0[1]/l0 + p0[1]
+    
+    ind = torch.logical_and(d < l0 + l1, d>=l0)
+    xx[ind] = (d[ind]-l0)*v1[0]/l1 + p1[0] 
+    yy[ind] = (d[ind]-l0)*v1[1]/l1 + p1[1]
+    
+    ind = torch.logical_and(d < l0 + l1 + l2, d>=l0 + l1)
+    xx[ind] = (d[ind]-l0-l1)*v2[0]/l2 + p2[0]
+    yy[ind] = (d[ind]-l0-l1)*v2[1]/l2 + p2[1]
+    
+    ind = (d>=l0 + l1 + l2)
+    xx[ind] = (d[ind]-l0-l1-l2)*v3[0]/l3 + p3[0]
+    yy[ind] = (d[ind]-l0-l1-l2)*v3[1]/l3 + p3[1]
+    
+
+    return xx, yy
+
+def catheter_mesh_1d_total_length(L_x, L_p, x2, x3, h, N_s):
+    x1 = -0.5*L_p
+    # ncy = 20
+    
+    n_periods = torch.floor(L_x / L_p)
+    L_x_last_period = L_x - n_periods*L_p
+    L_p_s = ((x1 + L_p) + (0 - x3) + torch.sqrt((x2 - x1)**2 + h**2) + torch.sqrt((x3 - x2)**2 + h**2))
+    L_s = L_p_s*n_periods + Lx2length(L_x_last_period, L_p, x1, x2, x3, h)
+    
+    # from 0
+    d_arr = torch.linspace(0, 1, N_s) * L_s
+    
+    # TODO do not compute gradient for floor
+    period_arr = torch.floor(d_arr / L_p_s).detach()
+    d_arr -= period_arr * L_p_s
+
+    
+    xx, yy = d2xy(d_arr, L_p, x1, x2, x3, h)
+        
+    xx = xx - period_arr*L_p
+    
+    
+    X_Y = torch.zeros((1, N_s, 2), dtype=torch.float).to(device)
+    X_Y[0, :, 0], X_Y[0, :, 1] = xx, yy
+    return X_Y, xx, yy
+
+
 
 
 
@@ -414,7 +480,7 @@ def preprocess_length(ind, t,  data_info, file_name, N_s = 50, L_x = 5, bw_metho
     uf  = np.float64(  file_name[file_name.find("uf") + len("uf"):  file_name.find("alpha")]  )
     L_p, x2, x3, h, press = data_info[sample - 1, :]
 
-    assert((h > 20 and h < 30) and (15 < x3 and x3 < L_p/4) and (-L_p/4 < x2 and x2 < L_p/4))
+    # assert((h > 20 and h < 30) and (15 < x3 and x3 < L_p/4) and (-L_p/4 < x2 and x2 < L_p/4))
     # generate mesh
     x1 = -0.5*L_p
     x2 = x1 + x2
@@ -439,6 +505,7 @@ def preprocess_length(ind, t,  data_info, file_name, N_s = 50, L_x = 5, bw_metho
 
     
     return x_mesh, y_mesh, x_b, y_b, xx, density_1d_data, np.array([sample, uf, L_p, x1, x2, x3, h])
+
 
 # ################################################################
 # # configs
