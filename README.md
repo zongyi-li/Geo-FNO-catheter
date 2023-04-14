@@ -46,8 +46,11 @@ The data are stored as nx by ny by ndata arrays (2d problems) or nx by ndata arr
 </video>
 
 ### Verification of the final optimal design
+<p float="left">
+<img src="Figs/initial_guess.jpg" width="300" />
+<img src="Figs/final_guess.jpg" width="300" />
 <img src="Figs/bacteria_population_semilogy.jpg" width="300" />
-
+</p>
 
 
 More details are in the paper:  Tingtao Zhou, Xuan Wan, Daniel Zhengyu Huang,
