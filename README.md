@@ -39,14 +39,15 @@ Verification on some test cases
 
 
 Real-time design optimization and final optimal design
+<video src="https://user-images.githubusercontent.com/16932196/232146051-5453088f-57d4-49ba-9aca-1ce4c914b29e.mp4" controls="controls" style="max-width: 730px;">
+</video>
 
-![Catheter design optimization](Figs/catheter_design_optimization.mp4)
 <img src="Figs/bacteria_population_semilogy.jpg" width="600" />
 
 
 
 More details are in the paper:  Tingtao Zhou, Xuan Wan, Daniel Zhengyu Huang,
-Zongyi Li, Zhiwei Peng, Anima Anandkumar, John F. Brady, Paul W. Sternberg, Chiara Daraio. "[The Cost-Accuracy Trade-Off In Operator Learning With Neural Networks](https://arxiv.org/abs/2203.13181)."
+Zongyi Li, Zhiwei Peng, Anima Anandkumar, John F. Brady, Paul W. Sternberg, Chiara Daraio. "[AI-aided Geometric Design of Anti-infection Catheters](https://arxiv.org/abs/2203.13181)."
 
 ## Code structure 
 
