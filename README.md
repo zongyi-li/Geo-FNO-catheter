@@ -27,22 +27,26 @@ The data are stored as nx by ny by ndata arrays (2d problems) or nx by ndata arr
 
 
 ## Results
-Training and test errors
-
-<img src="Figs/Loss.jpg" width="600" />
+### Training and test errors, and verification on some test cases
 
 
-Verification on some test cases
-
-<img src="Figs/Validation.0.jpg" width="400" />
-<img src="Figs/Validation.8.jpg" width="400" />
 
 
-Real-time design optimization and final optimal design
+
+
+<p float="left">
+<img src="Figs/Loss.jpg" width="240" />
+<img src="Figs/Validation.0.jpg" width="300" />
+<img src="Figs/Validation.8.jpg" width="300" />
+</p>
+
+
+### Real-time design optimization
 <video src="https://user-images.githubusercontent.com/16932196/232146051-5453088f-57d4-49ba-9aca-1ce4c914b29e.mp4" controls="controls" style="max-width: 400px;">
 </video>
 
-<img src="Figs/bacteria_population_semilogy.jpg" width="400" />
+### Verification of the final optimal design
+<img src="Figs/bacteria_population_semilogy.jpg" width="300" />
 
 
 
