@@ -54,7 +54,7 @@ The data are stored as nx by ny by ndata arrays (2d problems) or nx by ndata arr
 
 
 More details are in the paper:  Tingtao Zhou, Xuan Wan, Daniel Zhengyu Huang,
-Zongyi Li, Zhiwei Peng, Anima Anandkumar, John F. Brady, Paul W. Sternberg, Chiara Daraio. "[AI-aided Geometric Design of Anti-infection Catheters](https://arxiv.org/abs/2203.13181)."
+Zongyi Li, Zhiwei Peng, Anima Anandkumar, John F. Brady, Paul W. Sternberg, Chiara Daraio. "[AI-aided Geometric Design of Anti-infection Catheters](https://arxiv.org/abs/2304.14554)."
 
 ## Code structure 
 
